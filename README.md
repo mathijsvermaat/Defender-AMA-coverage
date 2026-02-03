@@ -18,46 +18,52 @@ By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent** ta
 
 ## Key Features
 
-*   **Coverage Analysis**  
+*   **Coverage Analysis**
     Detect devices that:
     *   Are onboarded to MDE but missing AMA
     *   Are not sending SecurityEvent logs despite being onboarded
 
-*   **Filtering Options**  
+*   **Filtering Options**
     Filter by:
     *   Workspace
-    *   Time range
+    *   Time range (default: 7 days)
     *   OS platform
     *   AMA status (All, Yes, No)
+    *   Exclude Workstations (default: Yes)
+    *   Exclude Compliant Machines
 
-*   **Summary Tiles**  
+*   **Summary Tiles**
     Quick overview of device counts based on AMA status
 
-*   **Detailed Breakdown**  
+*   **Detailed Breakdown**
     Categorizes devices as:
     *   **MDE + AMA**
     *   **MDE Only**
     *   **AMA Only**
 
-*   **DCR Association**  
+*   **DCR Association**
     Displays Data Collection Rules (DCRs) linked to machines for AMA configuration
 
-*   **Merged View**  
+*   **Merged View**
     Combines AMA-enabled devices with associated DCRs for full visibility
 
 ***
 
 ## Important Notes
 
-*   **Windows-Only Support**  
-    This workbook is designed for **Windows endpoints** (Windows Server and Windows client OS).  
-    Linux devices are not included because they do not generate SecurityEvent logs.
+*   **Windows and Linux Support**
+    This workbook supports both **Windows** and **Linux** endpoints.
+    - Windows devices are validated using the **SecurityEvent** table
+    - Linux devices are validated using the **Syslog** table
 
-*   **SecurityEvent Check**  
-    Queries validate Windows security log ingestion into Sentinel using the **SecurityEvent** table.
+*   **Log Ingestion Check**
+    Queries validate security log ingestion into Sentinel using **SecurityEvent** (Windows) and **Syslog** (Linux) tables.
 
-*   **OS Name Limitation**  
-    Some AMA versions do not report the full OS name (e.g., only `Windows` instead of `Windows Server 2025`).  
+*   **Device Type Filtering**
+    By default, workstations and mobile devices are excluded to focus on server infrastructure. This can be toggled via the **Exclude Workstations** filter.
+
+*   **OS Name Limitation**
+    Some AMA versions do not report the full OS name (e.g., only `Windows` instead of `Windows Server 2025`).
     This can make filtering by server OS more challenging. Consider using additional metadata or naming conventions for accurate filtering.
 
 ***
@@ -68,6 +74,7 @@ By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent** ta
     *   **DeviceInfo** (Defender onboarding status)
     *   **Heartbeat** (AMA presence and last seen timestamp)
     *   **SecurityEvent** (Windows security log ingestion)
+    *   **Syslog** (Linux security log ingestion)
 2.  Joins and correlates AMA presence, Defender onboarding, and log ingestion.
 3.  Applies filters for AMA status and OS platform.
 4.  Outputs:
@@ -95,6 +102,7 @@ By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent** ta
     *   `DeviceInfo`
     *   `Heartbeat`
     *   `SecurityEvent`
+    *   `Syslog`
 
 ***
 
@@ -105,8 +113,10 @@ By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent** ta
 3.  Paste the JSON from this repository
 4.  Save and customize filters as needed
 
-**Advisory:**  
-Set `HasAMA = Yes` for a cleaner merged view  
-Default time range is 3 days (adjustable)
+**Advisory:**
+- Set `HasAMA = Yes` for a cleaner merged view
+- Default time range is 7 days (adjustable)
+- Workstations are excluded by default (toggle with **Exclude Workstations** filter)
+- By default, the **Exclude Compliant** filter is set to `MDE + AMA`, which excludes compliant machines so you can focus on remediation. Adjust this filter to include compliant devices if needed.
 
 ***
