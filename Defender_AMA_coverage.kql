@@ -78,6 +78,7 @@ DeviceInfo
     | join kind=leftouter (
         DeviceInfo
         | where OnboardingStatus != "Onboarded"
+        | where OnboardingStatus == "Onboarded"
         | where DeviceType <> ExcludeWorkstation
         | where DeviceType <> "Mobile"
         | summarize arg_max(TimeGenerated, OSPlatform, OnboardingStatus) by DeviceName
