@@ -5,6 +5,8 @@
 // as well as devices that are sending logs via AMA but are not onboarded in MDE
 // Exclude Workstations from the report
 let ExcludeWorkstation = "Workstation";
+// Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.
+let Timeframe = ago(7d);
 // Devices onboarded in Defender with or without AMA
 (
 DeviceInfo
@@ -14,24 +16,22 @@ DeviceInfo
 | summarize arg_max(TimeGenerated, OSPlatform, OnboardingStatus) by DeviceName
 | extend DeviceNameLower = tolower(tostring(split(DeviceName, ".")[0]))
 | join kind=leftouter (
-    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.
     Heartbeat
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > Timeframe
     | summarize LastAMASeen = max(TimeGenerated) by Computer
     | extend ComputerLower = tolower(tostring(split(Computer, ".")[0]))
     )
     on $left.DeviceNameLower == $right.ComputerLower
 | join kind=leftouter (
     SecurityEvent
-    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > Timeframe
     | summarize LastSecurityEvent = max(TimeGenerated) by Computer
     | extend ComputerLower = tolower(tostring(split(Computer, ".")[0]))
     )
     on $left.DeviceNameLower == $right.ComputerLower
 | join kind=leftouter (
     Syslog
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > Timeframe
     | summarize LastSyslogEvent = max(TimeGenerated) by Computer
     | extend ComputerLower = tolower(tostring(split(Computer, ".")[0]))
     )
@@ -58,8 +58,7 @@ DeviceInfo
 // AMA-only devices (Heartbeat present, NOT onboarded in Defender)
 | union (
     Heartbeat
-    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > Timeframe
     | summarize
         LastAMASeen = max(TimeGenerated),
         Latest = arg_max(TimeGenerated, OSType, OSName, Category)
@@ -87,15 +86,14 @@ DeviceInfo
     ) on $left.ComputerLower == $right.DeviceNameLower
 | join kind=leftouter (
     SecurityEvent
-    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > Timeframe
     | summarize LastSecurityEvent = max(TimeGenerated) by Computer
     | extend ComputerLower = tolower(tostring(split(Computer, ".")[0]))
     )
     on ComputerLower
 | join kind=leftouter (
     Syslog
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > Timeframe
     | summarize LastSyslogEvent = max(TimeGenerated) by Computer
     | extend ComputerLower = tolower(tostring(split(Computer, ".")[0]))
     )
