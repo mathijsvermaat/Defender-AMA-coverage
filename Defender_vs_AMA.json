@@ -35,7 +35,7 @@
                             "additionalResourceOptions": [],
                             "showDefault": false
                         },
-                        "jsonData": "[{\"value\": \"Yes\", \"label\": \"Yes\", \"selected\":No},\r\n {\"value\": \"No\", \"label\": \"No\"}]",
+                        "jsonData": "[{\"value\": \"Yes\", \"label\": \"Yes\", \"selected\":false},\r\n {\"value\": \"No\", \"label\": \"No\"}]",
                         "value": "No",
                         "key": "f3a1b2c3-d4e5-4f67-8901-234567890abc"
                     }
