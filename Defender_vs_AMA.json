@@ -221,7 +221,7 @@
                 "size": 4,
                 "timeContextFromParameter": "TimeRange",
                 "queryType": 0,
-                "resourceType": "microsoft.operationalinsights/workspaces",
+                "resourceType": "{Workspace}",
                 "crossComponentResources": [
                     "{Workspace}"
                 ],
