@@ -134,6 +134,21 @@
                         "key": "811473d6-0ecb-4ad1-8f71-99425718f05d"
                     },
                     {
+                        "id": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "DataSourceMode",
+                        "label": "Data source",
+                        "type": 2,
+                        "isRequired": true,
+                        "typeSettings": {
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "jsonData": "[\r\n  {\"label\": \"Log Analytics (Sentinel)\", \"value\": \"LA\", \"selected\": true},\r\n  {\"label\": \"Advanced Hunting (Defender XDR)\", \"value\": \"AH\"}\r\n]\r\n",
+                        "value": "LA",
+                        "key": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f"
+                    },
+                    {
                         "id": "4dcbf10d-cee3-4c37-a816-a31b6aae7fed",
                         "version": "KqlParameterItem/1.0",
                         "name": "ServerFilter",
@@ -452,7 +467,300 @@
                 }
             },
             "name": "Table - MDEvsAMA",
-            "id": "34304cc6-9ade-47a7-ba1b-b27dcf12f069"
+            "id": "34304cc6-9ade-47a7-ba1b-b27dcf12f069",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "DataSourceMode",
+                    "comparison": "isEqualTo",
+                    "value": "LA"
+                }
+            ]
+        },
+        {
+            "type": 1,
+            "content": {
+                "json": "> **Advanced Hunting mode.** In this tenant Advanced Hunting can only query Defender XDR tables, not the Microsoft Sentinel tables. So onboarding status (`DeviceInfo`) is fetched via **Advanced Hunting** and AMA heartbeat & log ingestion (`Heartbeat` / `SecurityEvent` / `Syslog`) via **Log Analytics** — two different data planes that **cannot be joined** here because Defender XDR data is not ingested into Sentinel. The workbook *Merge* control also cannot combine an Advanced Hunting query with a Log Analytics query, so the two results are shown as **separate tables below** instead of one merged grid. **Correlate manually on the short device name:** `DeviceKey` in the top (Advanced Hunting) table matches `AMAKey` in the bottom (Log Analytics) table. A device that appears only in the top table is onboarded to MDE but has **no AMA heartbeat** in the time window; a device that appears only in the bottom table has an **AMA heartbeat but is not onboarded** to MDE; a device in **both** tables has MDE + AMA. After importing in the Defender portal, edit the `Table - MDE (Advanced Hunting)` step once and confirm its **Data source = Advanced hunting** (binding `queryType: advancedHunting`). `StatusCategory` and the `Exclude Compliant` / `AMA heartbeat seen` filters are not applied in this mode."
+            },
+            "name": "Text - AH mode note",
+            "id": "9d4e1f02-7c63-4a85-b6d1-2e3f4a5b6c7d",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "DataSourceMode",
+                    "comparison": "isEqualTo",
+                    "value": "AH"
+                }
+            ]
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "// Advanced Hunting (Defender XDR): onboarded device inventory only.\r\n// Advanced Hunting cannot query the Microsoft Sentinel tables\r\n// (Heartbeat / SecurityEvent / Syslog) in this tenant, so AMA telemetry is\r\n// fetched separately in Log Analytics and shown in the table below it.\r\nDeviceInfo\r\n| where OnboardingStatus == \"Onboarded\"\r\n| where DeviceType <> '{ExcludeWorkstation}'\r\n| where DeviceType <> \"Mobile\"\r\n| summarize arg_max(Timestamp, OSPlatform, OnboardingStatus) by DeviceName\r\n| extend DeviceKey = tolower(tostring(split(DeviceName, \".\")[0]))\r\n| project\r\n    DeviceName = tostring(split(DeviceName, \".\")[0]),\r\n    DeviceKey,\r\n    OSPlatform = tostring(OSPlatform),\r\n    MDEStatus = tostring(OnboardingStatus)\r\n| where OSPlatform contains '{ServerFilter}'\r\n| order by DeviceName asc",
+                "size": 2,
+                "title": "\ud83d\udccb Onboarded Devices (Advanced Hunting / Defender XDR)",
+                "timeContextFromParameter": "TimeRange",
+                "showExportToExcel": true,
+                "queryType": "advancedHunting"
+            },
+            "name": "Table - MDE (Advanced Hunting)",
+            "id": "7b5c9e21-4a8d-4f2b-9c31-1a2b3c4d5e6f",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "DataSourceMode",
+                    "comparison": "isEqualTo",
+                    "value": "AH"
+                }
+            ]
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "// Log Analytics (Microsoft Sentinel): AMA heartbeat and log ingestion per device.\r\n// Correlate with the Advanced Hunting device list above on the short device name (AMAKey = DeviceKey).\r\nHeartbeat\r\n| summarize LastAMASeen = max(TimeGenerated) by Computer\r\n| extend DeviceKey = tolower(tostring(split(Computer, \".\")[0]))\r\n| join kind=leftouter (\r\n    SecurityEvent\r\n    | summarize LastSecurityEvent = max(TimeGenerated) by Computer\r\n    | extend DeviceKey = tolower(tostring(split(Computer, \".\")[0]))\r\n    | project DeviceKey, LastSecurityEvent\r\n    ) on DeviceKey\r\n| join kind=leftouter (\r\n    Syslog\r\n    | summarize LastSyslogEvent = max(TimeGenerated) by Computer\r\n    | extend DeviceKey = tolower(tostring(split(Computer, \".\")[0]))\r\n    | project DeviceKey, LastSyslogEvent\r\n    ) on DeviceKey\r\n| extend\r\n    AMADevice = tostring(split(Computer, \".\")[0]),\r\n    HeartbeatSeen = \"Yes\",\r\n    HasAMA = \"Yes\",\r\n    AMAStatus = \"Heartbeat seen\",\r\n    SendsSecurityLogs = iff(isnotempty(LastSecurityEvent), \"Yes\", \"No\"),\r\n    SendsSyslogLogs = iff(isnotempty(LastSyslogEvent), \"Yes\", \"No\"),\r\n    LastEvent = coalesce(LastSecurityEvent, LastSyslogEvent)\r\n| project\r\n    AMADevice,\r\n    AMAKey = DeviceKey,\r\n    HeartbeatSeen,\r\n    HasAMA,\r\n    AMAStatus,\r\n    LastAMASeen,\r\n    SendsSecurityLogs,\r\n    SendsSyslogLogs,\r\n    LastEvent\r\n| order by AMADevice asc",
+                "size": 2,
+                "title": "\ud83d\udce1 AMA Heartbeat & Log Ingestion (Log Analytics / Sentinel)",
+                "timeContextFromParameter": "TimeRange",
+                "showExportToExcel": true,
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "crossComponentResources": [
+                    "{Workspace}"
+                ],
+                "gridSettings": {
+                    "formatters": [
+                        {
+                            "columnMatch": "HeartbeatSeen",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSecurityLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSyslogLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "filter": true
+                }
+            },
+            "name": "Table - AMA telemetry (Log Analytics)",
+            "id": "a2c4e6f8-1b3d-4e5f-8a9b-0c1d2e3f4a5b",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "DataSourceMode",
+                    "comparison": "isEqualTo",
+                    "value": "AH"
+                }
+            ]
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "{\r\n  \"version\": \"Merge/1.0\",\r\n  \"merges\": [\r\n    {\r\n      \"id\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\",\r\n      \"leftTable\": \"Table - MDE (Advanced Hunting)\",\r\n      \"mergeType\": \"fullouter\",\r\n      \"leftColumn\": \"DeviceKey\",\r\n      \"rightTable\": \"Table - AMA telemetry (Log Analytics)\",\r\n      \"rightColumn\": \"AMAKey\"\r\n    }\r\n  ],\r\n  \"projectRename\": [\r\n    { \"originalName\": \"[Table - MDE (Advanced Hunting)].DeviceKey\", \"mergedName\": \"DeviceKey\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].AMAKey\", \"mergedName\": \"AMAKey\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - MDE (Advanced Hunting)].DeviceName\", \"mergedName\": \"DeviceName\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - MDE (Advanced Hunting)].OSPlatform\", \"mergedName\": \"OSPlatform\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - MDE (Advanced Hunting)].MDEStatus\", \"mergedName\": \"MDEStatus\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].AMADevice\", \"mergedName\": \"AMADevice\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].HeartbeatSeen\", \"mergedName\": \"HeartbeatSeen\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].HasAMA\", \"mergedName\": \"HasAMA\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].AMAStatus\", \"mergedName\": \"AMAStatus\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].LastAMASeen\", \"mergedName\": \"LastAMASeen\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].SendsSecurityLogs\", \"mergedName\": \"SendsSecurityLogs\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].SendsSyslogLogs\", \"mergedName\": \"SendsSyslogLogs\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false },\r\n    { \"originalName\": \"[Table - AMA telemetry (Log Analytics)].LastEvent\", \"mergedName\": \"LastEvent\", \"fromId\": \"c4e6f8a0-3d5f-4a7b-8c9d-2e3f4a5b6c7d\", \"isNewItem\": false }\r\n  ]\r\n}",
+                "size": 2,
+                "title": "\ud83d\udd17 MDE + AMA Correlation (Advanced Hunting + Log Analytics)",
+                "showExportToExcel": true,
+                "queryType": 7,
+                "gridSettings": {
+                    "formatters": [
+                        {
+                            "columnMatch": "HasAMA",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "HeartbeatSeen",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSecurityLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSyslogLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "filter": true,
+                    "sortBy": [
+                        {
+                            "itemKey": "MDEStatus",
+                            "sortOrder": 1
+                        }
+                    ]
+                }
+            },
+            "name": "Merge - MDE + AMA (Advanced Hunting)",
+            "id": "b3d5f7a9-2c4e-4f6a-9b8c-1d2e3f4a5b6c",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "DataSourceMode",
+                    "comparison": "isEqualTo",
+                    "value": "__MergeDisabled__"
+                }
+            ]
         },
         {
             "type": 1,
@@ -814,7 +1122,14 @@
                 "queryType": 7
             },
             "name": "Merge - MDEvsAMA + DCR",
-            "id": "cc1743ce-bc12-4c0f-8bb2-4f3f4432d76c"
+            "id": "cc1743ce-bc12-4c0f-8bb2-4f3f4432d76c",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "DataSourceMode",
+                    "comparison": "isEqualTo",
+                    "value": "LA"
+                }
+            ]
         }
     ],
     "fallbackResourceIds": [
