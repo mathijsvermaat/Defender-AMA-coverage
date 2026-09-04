@@ -2,7 +2,10 @@
 
 # AMA vs Defender Coverage Workbook
 
-#### ⚠️ This workbook assumes Microsoft Defender XDR data is ingested into Sentinel. Without ingestion, device name normalization and correlation may be inconsistent. To workaround that, copy the KQL query from the Github page and run it in Advanced Hunting in the Defender Portal (https://security.microsoft.com). 
+> [!NOTE]
+> **Part of the [Sentinel Maturity Model](https://github.com/mathijsvermaat/Sentinel-Maturity)** — tiered guidance for Microsoft Sentinel data-connector onboarding, retention and detection coverage. This workbook backs the [Defender AMA Coverage walkthrough](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/procedures/defender-ama-coverage.md); record the coverage gaps it surfaces in the [assessment checklist](https://mathijsvermaat.github.io/sentinel-maturity-assessment.html).
+
+#### ⚠️ This workbook assumes Microsoft Defender XDR data is ingested into Sentinel. Without ingestion, device name normalization and correlation may be inconsistent. To work around that, use the **Data source** toggle (see [Data source modes](#data-source-modes-log-analytics-vs-advanced-hunting)) to switch the coverage table to **Advanced Hunting**, or copy the KQL query from the GitHub page and run it in Advanced Hunting in the Defender Portal (https://security.microsoft.com). 
 
 When running the KQL query, the **AMA presence** in the first table is inferred from the `Heartbeat` table within the selected time window — not from the actual extension state. The reason is that the real installation state is only available via an Azure Resource Graph (ARG) call. As a result, a device may show as `No AMA or No Heartbeat` / `MDE Only (no AMA heartbeat)` even when the AMA extension is installed but not reporting (for example: VM powered off, network blocked, AMA service stopped, or no DCR associated).
 
@@ -23,6 +26,40 @@ This Microsoft Sentinel Workbook provides visibility into Microsoft Defender for
 *   **Last heartbeat and log timestamps** for freshness
 
 By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent/Syslog** tables, the workbook identifies configuration gaps and supports remediation efforts.
+
+***
+
+## Data source modes (Log Analytics vs Advanced Hunting)
+
+The **Data source** filter at the top of the workbook controls how the *Endpoint Coverage Matrix* is sourced. The rest of the workbook (tiles, DCR inventory, merged DCR view) always runs against Log Analytics.
+
+| Mode | Coverage matrix structure | When to use |
+|------|---------------------------|-------------|
+| **Log Analytics (Sentinel)** *(default)* | A single `Table - MDEvsAMA` query joins `DeviceInfo`, `Heartbeat`, `SecurityEvent`, and `Syslog` in one Log Analytics query, with a computed `StatusCategory`. | Defender XDR data is ingested into Sentinel. Full functionality, including tiles and the merged DCR view. |
+| **Advanced Hunting (Defender XDR)** | Two side-by-side tables (see below). | Defender XDR data is **not** ingested into Sentinel. Advanced Hunting can only reach Defender XDR tables, so onboarding and AMA telemetry are fetched separately and shown side by side. |
+
+### Why Advanced Hunting mode uses two tables
+
+Advanced Hunting (in the Defender portal) can query Defender XDR tables but **not** the Microsoft Sentinel tables (`Heartbeat` / `SecurityEvent` / `Syslog`). Running the full single-query coverage matrix against the Advanced Hunting data source therefore fails. These are two separate data planes that cannot be joined — neither in KQL (Advanced Hunting can't see the Sentinel tables) nor by the workbook **Merge** control (the Merge data source cannot consume an `advancedHunting` query as an input). Advanced Hunting mode therefore presents the data as two correlated tables:
+
+1. **`Table - MDE (Advanced Hunting)`** — `DeviceInfo` onboarding status from Defender XDR (`Timestamp`, `queryType: advancedHunting`). Projects `DeviceName`, `DeviceKey`, `OSPlatform`, `MDEStatus`.
+2. **`Table - AMA telemetry (Log Analytics)`** — `Heartbeat` + `SecurityEvent` + `Syslog` per device from the Sentinel workspace (`TimeGenerated`). Projects `AMADevice`, `AMAKey`, `HeartbeatSeen`, `SendsSecurityLogs`, `SendsSyslogLogs`, and timestamps.
+
+Both tables are shown. **Correlate manually on the short device name:** `DeviceKey` (top table) matches `AMAKey` (bottom table).
+
+- A device in **both** tables = MDE + AMA.
+- A device in the **top table only** = onboarded to MDE but **no** AMA heartbeat in the time window (MDE-only / not reporting).
+- A device in the **bottom table only** = has an AMA heartbeat but is **not** onboarded to MDE (AMA-only).
+
+> The `Merge - MDE + AMA (Advanced Hunting)` step is left in the workbook but disabled (a `DataSourceMode` value that never matches), because the workbook Merge control returns no rows when one of its inputs is an Advanced Hunting query.
+
+**Setup for Advanced Hunting mode:** after importing the workbook in the Microsoft Defender portal, switch to edit mode, open the `Table - MDE (Advanced Hunting)` step, and confirm **Data source = Advanced hunting** (binding `queryType: advancedHunting`).
+
+**Limitations of Advanced Hunting mode:**
+- `StatusCategory` and the `Exclude Compliant` / `AMA heartbeat seen` filters are **not** applied (those depend on a single combined query). Use `MDEStatus` + `HeartbeatSeen` across the two tables instead.
+- The Executive Summary **tiles** and the **merged DCR view** are Log-Analytics-only and hidden in Advanced Hunting mode.
+- Advanced Hunting retains Defender XDR data for **30 days** by default (longer only if streamed through Sentinel).
+- Viewers need Defender XDR access in addition to Log Analytics reader.
 
 ***
 
@@ -133,10 +170,20 @@ By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent/Sysl
 2.  Click **Add Workbook → Advanced Editor**
 3.  Paste the JSON from this repository
 4.  Save and customize filters as needed
+5.  *(Optional)* To use **Advanced Hunting** mode, open the workbook in the Microsoft Defender portal and confirm the `Table - MDE (Advanced Hunting)` item has **Data source = Advanced hunting**. See [Data source modes](#data-source-modes-log-analytics-vs-advanced-hunting).
 
 **Advisory:**
 - Default time range is 7 days (adjustable)
 - Workstations are excluded by default (toggle with **Exclude Workstations** filter)
 - By default, the **Exclude Compliant** filter is set to `MDE + AMA`, which excludes compliant machines so you can focus on remediation. Adjust this filter to include compliant devices if needed.
+
+***
+
+## Related
+
+- **[Sentinel Maturity Model](https://github.com/mathijsvermaat/Sentinel-Maturity)** — the tiered connector guidance model this workbook belongs to.
+- **[Defender AMA Coverage walkthrough](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/procedures/defender-ama-coverage.md)** — step-by-step guide to deploying the workbook and interpreting the coverage gaps.
+- **Connectors this workbook validates** — [Windows Security Events](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/connectors/windows-security-events.md), [Syslog for Linux](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/connectors/syslog-linux.md), [Windows Forwarded Events](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/connectors/windows-forwarded-events.md) and [Defender for Cloud](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/connectors/microsoft-defender-for-cloud.md).
+- **[Assessment checklist](https://mathijsvermaat.github.io/sentinel-maturity-assessment.html)** — the *Defender vs AMA coverage* gap analysis records Both / AMA only / MDE only counts straight from this workbook.
 
 ***
