@@ -28,7 +28,7 @@ For the distinction between telemetry and extension installation, see [Understan
 | [Defender_vs_AMA_NativeXDR.json](Defender_vs_AMA_NativeXDR.json) | **Preview / opt-in** | Native Defender XDR `DeviceInfo` plus `Heartbeat`, `SecurityEvent`, and `Syslog` from the selected Sentinel workspace. No Defender data ingestion into Log Analytics is required. |
 
 > [!WARNING]
-> The native XDR preview has been validated in one test tenant, but has not yet been broadly validated in production. Import it as a **separate workbook** and keep your existing deployment as a fallback.
+> The native XDR preview has not yet been broadly validated in production. Import it as a **separate workbook** and keep your existing deployment as a fallback.
 
 The existing workbook's older, limited Advanced Hunting mode is unchanged. Use the separate preview file for the full native implementation.
 
