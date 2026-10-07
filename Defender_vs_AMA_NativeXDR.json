@@ -1,0 +1,841 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+        {
+            "id": "0a0898de-eac9-4cdf-ab00-c3417996f321",
+            "type": 9,
+            "name": "Show guidance",
+            "content": {
+                "version": "KqlParameterItem/1.0",
+                "parameters": [
+                    {
+                        "id": "7eca9b53-a573-4f15-9cd7-95b7cc7b4329",
+                        "key": "7eca9b53-a573-4f15-9cd7-95b7cc7b4329",
+                        "name": "Help",
+                        "label": "🔎 Show Help",
+                        "value": "Yes",
+                        "type": 10,
+                        "isRequired": true,
+                        "typeSettings": {
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "version": "",
+                        "description": "This will show some help information (guidance per table)",
+                        "jsonData": "[{\"value\": \"Yes\", \"label\": \"Yes\", \"selected\":true},\r\n {\"value\": \"No\", \"label\": \"No\"}]"
+                    },
+                    {
+                        "id": "f3a1b2c3-d4e5-4f67-8901-234567890abc",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "ShowVisuals",
+                        "label": "📊 Show Visuals",
+                        "type": 10,
+                        "isRequired": true,
+                        "typeSettings": {
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "jsonData": "[{\"value\": \"Yes\", \"label\": \"Yes\", \"selected\":false},\r\n {\"value\": \"No\", \"label\": \"No\"}]",
+                        "value": "No",
+                        "key": "f3a1b2c3-d4e5-4f67-8901-234567890abc"
+                    }
+                ],
+                "style": "above",
+                "title": ""
+            }
+        },
+        {
+            "type": 1,
+            "content": {
+                "json": "# 🛡️ Endpoint Telemetry Coverage Dashboard\n## Azure Monitor Agent (AMA) & Microsoft Defender for Endpoint (MDE) Correlation Report\n---\n\n### ⚠️ Prerequisites\nUse this workbook in the **Microsoft Defender portal** with a Microsoft Sentinel workspace connected to the unified experience. The workbook queries `DeviceInfo` directly from native Defender XDR Advanced Hunting and correlates it with `Heartbeat`, `SecurityEvent`, and `Syslog` from the connected Sentinel workspace. Defender XDR data does **not** need to be ingested into Log Analytics.\n\n---\n\n### 📋 Purpose\nThis operational dashboard provides **unified visibility** into endpoint telemetry coverage across your hybrid environment. It correlates data from multiple sources to identify configuration gaps and ensure comprehensive security monitoring.\n\n### 🎯 Key Objectives\n- **Identify coverage gaps**: Detect devices with MDE installed but missing the Azure Monitor Agent (AMA)\n- **Validate log ingestion**: Confirm devices are actively sending SecurityEvent and Syslog data to Sentinel\n- **Monitor agent health**: Track last heartbeat and log ingestion timestamps to assess connectivity\n- **Drive remediation**: Prioritize onboarding efforts for non-compliant endpoints\n\n### 📊 Data Sources\n| Table | Purpose |\n|-------|---------|\n| `DeviceInfo` | MDE enrollment and onboarding status |\n| `Heartbeat` | AMA agent health and connectivity |\n| `SecurityEvent` | Windows security log ingestion |\n| `WindowsEvent` | Windows event log ingestion |\n| `Syslog` | Linux security log ingestion |\n| `Azure Resource Graph` | VM inventory and DCR associations |\n\n### 👥 Target Audience\n- Security Operations Center (SOC) analysts\n- Security architects and engineers\n- IT Operations and infrastructure teams\n- Compliance and audit teams",
+                "title": ""
+            },
+            "name": "Text - Explainer AMA and MDE correlation",
+            "id": "c44ead40-4638-40d0-ad3e-ba414ecc2acd",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                }
+            ]
+        },
+        {
+            "type": 1,
+            "content": {
+                "json": "## 🔍 Global Filters\r\nUse the filters below to customize the dashboard view. All visualizations will update dynamically based on your selections.\r\n\r\n| Filter | Description |\r\n|--------|-------------|\r\n| **Workspace** | Select the Log Analytics workspace connected to Microsoft Sentinel |\r\n| **Time Range** | Define the lookback period for log queries (default: 7 days) |\r\n| **OS Platform Filter** | Text-based filter to include specific OS platforms (e.g., 'server', 'windows', 'linux') |\r\n| **AMA heartbeat seen** | Filter devices by whether an AMA heartbeat was received in the time window (All / Yes / No). 'No' does not necessarily mean AMA is uninstalled — see the merged view for the authoritative extension state. |\r\n| **Exclude Compliant** | Hide fully compliant devices (MDE + AMA) to focus on remediation targets |\r\n| **Exclude Workstations** | Hide DeviceType 'Workstation' (Windows 10/11) |"
+            },
+            "name": "Text - Global Filters",
+            "id": "3d15b917-9e4b-4783-b69d-cbf984a13f06",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                }
+            ]
+        },
+        {
+            "type": 9,
+            "content": {
+                "version": "KqlParameterItem/1.0",
+                "parameters": [
+                    {
+                        "id": "69db8811-d30c-45c1-ae32-597d2da7cd35",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "Workspace",
+                        "type": 5,
+                        "isRequired": true,
+                        "query": "resources | where type =~ 'Microsoft.operationsmanagement/solutions' | where name contains 'SecurityInsights' | project id = tostring(properties.workspaceResourceId)",
+                        "typeSettings": {
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "timeContext": {
+                            "durationMs": 86400000
+                        },
+                        "queryType": 1,
+                        "resourceType": "microsoft.resourcegraph/resources",
+                        "key": "69db8811-d30c-45c1-ae32-597d2da7cd35"
+                    },
+                    {
+                        "id": "29a41af7-58c9-4e80-bb73-45f324b5569c",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "WorkspaceId",
+                        "type": 1,
+                        "isRequired": true,
+                        "isHiddenWhenLocked": true,
+                        "query": "resources | where type =~ 'microsoft.operationalinsights/workspaces' | where id =~ '{Workspace}' | project value = tostring(properties.customerId) | where isnotempty(value)",
+                        "queryType": 1,
+                        "resourceType": "microsoft.resourcegraph/resources",
+                        "crossComponentResources": [
+                            "value::all"
+                        ]
+                    },
+                    {
+                        "id": "811473d6-0ecb-4ad1-8f71-99425718f05d",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "TimeRange",
+                        "type": 4,
+                        "typeSettings": {
+                            "selectableValues": [
+                                {
+                                    "durationMs": 259200000
+                                },
+                                {
+                                    "durationMs": 604800000
+                                },
+                                {
+                                    "durationMs": 1209600000
+                                },
+                                {
+                                    "durationMs": 2592000000
+                                },
+                                {
+                                    "durationMs": 5184000000
+                                },
+                                {
+                                    "durationMs": 7776000000
+                                }
+                            ],
+                            "allowCustom": false
+                        },
+                        "timeContext": {
+                            "durationMs": 86400000
+                        },
+                        "value": {
+                            "durationMs": 604800000
+                        },
+                        "key": "811473d6-0ecb-4ad1-8f71-99425718f05d"
+                    },
+                    {
+                        "id": "4dcbf10d-cee3-4c37-a816-a31b6aae7fed",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "ServerFilter",
+                        "label": "Filter OS Platform (contains…)",
+                        "type": 1,
+                        "timeContext": {
+                            "durationMs": 86400000
+                        },
+                        "value": "",
+                        "key": "4dcbf10d-cee3-4c37-a816-a31b6aae7fed"
+                    },
+                    {
+                        "id": "20111e0e-4ff6-4757-95fd-71f8fbdf2dfe",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "HasAMA",
+                        "label": "AMA heartbeat seen",
+                        "type": 2,
+                        "typeSettings": {
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "jsonData": "[\r\n  {\"label\": \"All\", \"value\": \"All\"},\r\n  {\"label\": \"Yes\", \"value\": \"Yes\"},\r\n  {\"label\": \"No\",  \"value\": \"No\"}\r\n]\r\n",
+                        "timeContext": {
+                            "durationMs": 86400000
+                        },
+                        "value": "All",
+                        "key": "20111e0e-4ff6-4757-95fd-71f8fbdf2dfe",
+                        "isRequired": true
+                    },
+                    {
+                        "id": "882a22bf-b6c4-4f89-af2c-e73fca05e2fe",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "ExcludeCompliant",
+                        "label": "Exclude Compliant Machines",
+                        "type": 2,
+                        "typeSettings": {
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "jsonData": "[\r\n  {\"label\": \"Yes\", \"value\": \"MDE + AMA\"},\r\n  {\"label\": \"No\",  \"value\": \"All\"}\r\n]\r\n",
+                        "value": "MDE + AMA",
+                        "key": "882a22bf-b6c4-4f89-af2c-e73fca05e2fe",
+                        "isRequired": true
+                    },
+                    {
+                        "id": "2af59abf-33b1-4970-886f-791e46919793",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "ExcludeWorkstation",
+                        "label": "Exclude Workstations",
+                        "type": 2,
+                        "isRequired": true,
+                        "typeSettings": {
+                            "additionalResourceOptions": []
+                        },
+                        "jsonData": "[\n    {\n        \"label\": \"Yes\",\n        \"value\": \"Workstation\"\n    },\n    {\n        \"label\": \"No\",\n        \"value\": \"All\"\n    }\n]",
+                        "value": "Workstation",
+                        "key": "2af59abf-33b1-4970-886f-791e46919793"
+                    }
+                ],
+                "style": "pills"
+            },
+            "name": "Parameters - Filters",
+            "id": "c926669c-9955-4a12-850b-d4d93f4332ba"
+        },
+        {
+            "type": 1,
+            "content": {
+                "json": "## 📈 Executive Summary\r\nHigh-level metrics showing the current state of endpoint telemetry coverage. These counts reflect the applied filters and provide a quick health check of your monitoring coverage.\r\n\r\n| Metric | Description |\r\n|--------|-------------|\r\n| **Number of devices** | Total count of unique endpoints in scope |\r\n| **AMA heartbeat seen** | Devices for which an AMA heartbeat was received in the selected time window. This does **not** prove AMA is uninstalled if absent — see note below. |\r\n| **No AMA / No heartbeat** | Devices where no AMA heartbeat was received. The AMA extension may still be installed but not reporting (VM powered off, network blocked, AMA service stopped, missing DCR). Cross-check with the merged view further down. |\r\n| **Non Compliant** | Count of non-compliant devices (not in 'MDE + AMA' state) |"
+            },
+            "name": "Text - Executive Summary",
+            "id": "cf829807-0cc5-4a83-b6a1-6674d890a73f",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                }
+            ]
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "{\"__advancedHuntingSettings\":true,\"query\":\"// Defender devices (only truly onboarded) with AMA & SecurityEvent\\r\\n(\\r\\nDeviceInfo\\r\\n| where OnboardingStatus == \\\"Onboarded\\\"\\r\\n| where DeviceType <> '{ExcludeWorkstation}'\\r\\n| where DeviceType <> \\\"Mobile\\\"\\r\\n| summarize arg_max(Timestamp, OSPlatform, OnboardingStatus) by DeviceName\\r\\n| extend DeviceNameLower = tolower(tostring(split(DeviceName, \\\".\\\")[0]))\\r\\n| join kind=leftouter (\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    Heartbeat\\r\\n    | summarize LastAMASeen = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on $left.DeviceNameLower == $right.ComputerLower\\r\\n| join kind=leftouter (\\r\\n    SecurityEvent\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    | summarize LastSecurityEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on $left.DeviceNameLower == $right.ComputerLower\\r\\n| join kind=leftouter (\\r\\n    Syslog\\r\\n    | summarize LastSyslogEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on $left.DeviceNameLower == $right.ComputerLower\\r\\n| extend \\r\\n    OSPlatform = tostring(OSPlatform),\\r\\n    MDEStatus = tostring(OnboardingStatus),\\r\\n    HeartbeatSeen = iff(isnotempty(LastAMASeen), \\\"Yes\\\", \\\"No\\\"),\\r\\n    HasAMA = iff(isnotempty(LastAMASeen), \\\"Yes\\\", \\\"No\\\"),\\r\\n    AMAStatus = iff(isnotempty(LastAMASeen), \\\"Heartbeat seen\\\", \\\"No AMA or No Heartbeat\\\"),\\r\\n    SendsSecurityLogs = iff(isnotempty(LastSecurityEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    SendsSyslogLogs = iff(isnotempty(LastSyslogEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    LastEvent = coalesce(LastSecurityEvent, LastSyslogEvent),\\r\\n    Source = \\\"Defender Device\\\"\\r\\n| project\\r\\n    DeviceName = tostring(split(DeviceName, \\\".\\\")[0]),\\r\\n    OSPlatform,\\r\\n    MDEStatus,\\r\\n    HeartbeatSeen,\\r\\n    HasAMA,\\r\\n    AMAStatus,\\r\\n    LastAMASeen,\\r\\n    SendsSecurityLogs,\\r\\n    SendsSyslogLogs,\\r\\n    LastEvent,\\r\\n    Source\\r\\n)\\r\\n// AMA-only devices (Heartbeat present, NOT onboarded in Defender)\\r\\n| union (\\r\\n    Heartbeat\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    | summarize \\r\\n        LastAMASeen = max(TimeGenerated),\\r\\n        Latest = arg_max(TimeGenerated, OSType, OSName, Category)\\r\\n        by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n// Keep Sentinel joins together before cross-source Defender correlation.\\r\\n| join kind=leftouter (\\r\\n    SecurityEvent\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    | summarize LastSecurityEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on ComputerLower\\r\\n| join kind=leftouter (\\r\\n    Syslog\\r\\n    | summarize LastSyslogEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on ComputerLower\\r\\n    // Exclude devices that ARE onboarded in Defender\\r\\n    | where ComputerLower !in (\\r\\n        DeviceInfo\\r\\n    | where OnboardingStatus == \\\"Onboarded\\\"\\r\\n    | where DeviceType <> '{ExcludeWorkstation}'\\r\\n    | where DeviceType <> \\\"Mobile\\\"\\r\\n    | summarize arg_max(Timestamp, OSPlatform) by DeviceName\\r\\n    | extend DeviceNameLower = tolower(tostring(split(DeviceName, \\\".\\\")[0]))\\r\\n    | project DeviceNameLower\\r\\n    )\\r\\n    // Check if device exists in DeviceInfo with different status\\r\\n    | join kind=leftouter (\\r\\n        DeviceInfo\\r\\n        | where OnboardingStatus != \\\"Onboarded\\\"\\r\\n        | where DeviceType <> '{ExcludeWorkstation}'\\r\\n        | where DeviceType <> \\\"Mobile\\\"\\r\\n        | summarize arg_max(Timestamp, OSPlatform, OnboardingStatus) by DeviceName\\r\\n        | extend DeviceNameLower = tolower(tostring(split(DeviceName, \\\".\\\")[0]))\\r\\n        | project DeviceNameLower, DefenderOSPlatform = OSPlatform, DefenderStatus = OnboardingStatus\\r\\n    ) on $left.ComputerLower == $right.DeviceNameLower\\r\\n| extend \\r\\n    DeviceName = Computer,\\r\\n    OSPlatform = coalesce(OSName, OSType, Category, \\\"Unknown\\\"),\\r\\n    MDEStatus = iff(isnotempty(DefenderStatus), tostring(DefenderStatus), \\\"Not in MDE\\\"),\\r\\n    HeartbeatSeen = \\\"Yes\\\",\\r\\n    HasAMA = \\\"Yes\\\",\\r\\n    AMAStatus = \\\"Heartbeat seen\\\",\\r\\n    SendsSecurityLogs = iff(isnotempty(LastSecurityEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    SendsSyslogLogs = iff(isnotempty(LastSyslogEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    LastEvent = coalesce(LastSecurityEvent, LastSyslogEvent),\\r\\n    Source = \\\"AMA Only\\\"\\r\\n| project\\r\\nDeviceName = tostring(split(DeviceName, \\\".\\\")[0]),\\r\\nOSPlatform,\\r\\nMDEStatus,\\r\\nHeartbeatSeen,\\r\\nHasAMA,\\r\\nAMAStatus,\\r\\nLastAMASeen,\\r\\nSendsSecurityLogs,\\r\\nSendsSyslogLogs,\\r\\nLastEvent,\\r\\nSource\\r\\n)\\r\\n// Classification with MDE, AMA or both\\r\\n// NOTE: \\\"AMA\\\" here is inferred from Heartbeat in the selected time window. A device\\r\\n// with no heartbeat (powered off, network blocked, AMA stopped) is classified as\\r\\n// \\\"MDE Only (no AMA heartbeat)\\\" even if the AMA extension is installed. The merged\\r\\n// view below cross-checks the extension state via Azure Resource Graph.\\r\\n| extend StatusCategory = case(\\r\\nSource == \\\"Defender Device\\\" and MDEStatus == \\\"Onboarded\\\" and HasAMA == \\\"Yes\\\", \\\"MDE + AMA\\\",\\r\\nSource == \\\"Defender Device\\\" and MDEStatus == \\\"Onboarded\\\" and HasAMA == \\\"No\\\", \\\"MDE Only (no AMA heartbeat)\\\",\\r\\nSource == \\\"Defender Device\\\" and MDEStatus != \\\"Onboarded\\\", strcat(\\\"MDE \\\", MDEStatus),\\r\\nSource == \\\"AMA Only\\\", \\\"AMA Only\\\",\\r\\n\\\"Unknown\\\"\\r\\n)\\r\\n| extend Compliance = StatusCategory <> \\\"MDE + AMA\\\"\\r\\n// Filters for workbook parameters\\r\\n| order by Source asc, DeviceName asc\\r\\n| where '{HasAMA}' == 'All' or HasAMA == '{HasAMA}'\\r\\n| where OSPlatform contains '{ServerFilter}'\\r\\n| where StatusCategory <> \\\"{ExcludeCompliant}\\\"\\r\\n// Summarize counts for tiles\\r\\n| summarize\\r\\n    TotalAll = count(),\\r\\n    TotalYes = countif(HasAMA == \\\"Yes\\\"),\\r\\n    TotalNo  = countif(HasAMA == \\\"No\\\"),\\r\\n    TotalCompliant = count(Compliance)\\r\\n| project\\r\\n    Category = pack_array(\\\"Number of devices\\\", \\\"AMA heartbeat seen\\\", \\\"No AMA / No heartbeat\\\", \\\"Non Compliant\\\"),\\r\\n    Total    = pack_array(TotalAll, TotalYes, TotalNo, TotalCompliant)\\r\\n| mv-expand Category, Total\",\"selectedWorkspaceIds\":[\"{WorkspaceId}\"]}",
+                "size": 4,
+                "timeContextFromParameter": "TimeRange",
+                "queryType": "advancedHunting",
+                "crossComponentResources": [
+                    "{Workspace}"
+                ],
+                "visualization": "tiles",
+                "gridSettings": {
+                    "filter": true
+                },
+                "tileSettings": {
+                    "titleContent": {
+                        "columnMatch": "Category",
+                        "formatter": 12,
+                        "formatOptions": {
+                            "palette": "blue"
+                        }
+                    },
+                    "leftContent": {
+                        "columnMatch": "Total",
+                        "formatter": 12,
+                        "formatOptions": {
+                            "palette": "auto"
+                        }
+                    },
+                    "showBorder": false,
+                    "size": "auto"
+                }
+            },
+            "name": "Visual - Tiles with counts",
+            "id": "605f8a54-6ff6-4620-9168-05f4684e3d3b"
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "{\"__advancedHuntingSettings\":true,\"query\":\"(\\r\\nDeviceInfo\\r\\n| where OnboardingStatus == \\\"Onboarded\\\"\\r\\n| where DeviceType <> '{ExcludeWorkstation}'\\r\\n| where DeviceType <> \\\"Mobile\\\"\\r\\n| summarize arg_max(Timestamp, OSPlatform, OnboardingStatus) by DeviceName\\r\\n| extend DeviceNameLower = tolower(tostring(split(DeviceName, \\\".\\\")[0]))\\r\\n| join kind=leftouter (\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    Heartbeat\\r\\n    | summarize LastAMASeen = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on $left.DeviceNameLower == $right.ComputerLower\\r\\n| join kind=leftouter (\\r\\n    SecurityEvent\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    | summarize LastSecurityEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on $left.DeviceNameLower == $right.ComputerLower\\r\\n| join kind=leftouter (\\r\\n    Syslog\\r\\n    | summarize LastSyslogEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on $left.DeviceNameLower == $right.ComputerLower\\r\\n| extend \\r\\n    OSPlatform = tostring(OSPlatform),\\r\\n    MDEStatus = tostring(OnboardingStatus),\\r\\n    HeartbeatSeen = iff(isnotempty(LastAMASeen), \\\"Yes\\\", \\\"No\\\"),\\r\\n    HasAMA = iff(isnotempty(LastAMASeen), \\\"Yes\\\", \\\"No\\\"),\\r\\n    AMAStatus = iff(isnotempty(LastAMASeen), \\\"Heartbeat seen\\\", \\\"No AMA or No Heartbeat\\\"),\\r\\n    SendsSecurityLogs = iff(isnotempty(LastSecurityEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    SendsSyslogLogs = iff(isnotempty(LastSyslogEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    LastEvent = coalesce(LastSecurityEvent, LastSyslogEvent),\\r\\n    Source = \\\"Defender Device\\\"\\r\\n| project\\r\\n    DeviceName = tostring(split(DeviceName, \\\".\\\")[0]),\\r\\n    OSPlatform,\\r\\n    MDEStatus,\\r\\n    HeartbeatSeen,\\r\\n    HasAMA,\\r\\n    AMAStatus,\\r\\n    LastAMASeen,\\r\\n    SendsSecurityLogs,\\r\\n    SendsSyslogLogs,\\r\\n    LastEvent,\\r\\n    Source\\r\\n)\\r\\n// AMA-only devices (Heartbeat present, NOT onboarded in Defender)\\r\\n| union (\\r\\n    Heartbeat\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    | summarize \\r\\n        LastAMASeen = max(TimeGenerated),\\r\\n        Latest = arg_max(TimeGenerated, OSType, OSName, Category)\\r\\n        by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n// Keep Sentinel joins together before cross-source Defender correlation.\\r\\n| join kind=leftouter (\\r\\n    SecurityEvent\\r\\n    //Check for logs within 7 day timeframe. Change accordingly if you want to check a bigger timeframe.\\r\\n    | summarize LastSecurityEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on ComputerLower\\r\\n| join kind=leftouter (\\r\\n    Syslog\\r\\n    | summarize LastSyslogEvent = max(TimeGenerated) by Computer\\r\\n    | extend ComputerLower = tolower(tostring(split(Computer, \\\".\\\")[0]))\\r\\n    )\\r\\n    on ComputerLower\\r\\n    // Exclude devices that ARE onboarded in Defender\\r\\n    | where ComputerLower !in (\\r\\n        DeviceInfo\\r\\n    | where OnboardingStatus == \\\"Onboarded\\\"\\r\\n    | where DeviceType <> '{ExcludeWorkstation}'\\r\\n    | where DeviceType <> \\\"Mobile\\\"\\r\\n    | summarize arg_max(Timestamp, OSPlatform) by DeviceName\\r\\n    | extend DeviceNameLower = tolower(tostring(split(DeviceName, \\\".\\\")[0]))\\r\\n    | project DeviceNameLower\\r\\n    )\\r\\n    // Check if device exists in DeviceInfo with different status\\r\\n    | join kind=leftouter (\\r\\n        DeviceInfo\\r\\n        | where OnboardingStatus != \\\"Onboarded\\\"\\r\\n        | where DeviceType <> '{ExcludeWorkstation}'\\r\\n        | where DeviceType <> \\\"Mobile\\\"\\r\\n        | summarize arg_max(Timestamp, OSPlatform, OnboardingStatus) by DeviceName\\r\\n        | extend DeviceNameLower = tolower(tostring(split(DeviceName, \\\".\\\")[0]))\\r\\n        | project DeviceNameLower, DefenderOSPlatform = OSPlatform, DefenderStatus = OnboardingStatus\\r\\n    ) on $left.ComputerLower == $right.DeviceNameLower\\r\\n| extend \\r\\n    DeviceName = Computer,\\r\\n    OSPlatform = coalesce(OSName, OSType, Category, \\\"Unknown\\\"),\\r\\n    MDEStatus = iff(isnotempty(DefenderStatus), tostring(DefenderStatus), \\\"Not in MDE\\\"),\\r\\n    HeartbeatSeen = \\\"Yes\\\",\\r\\n    HasAMA = \\\"Yes\\\",\\r\\n    AMAStatus = \\\"Heartbeat seen\\\",\\r\\n    SendsSecurityLogs = iff(isnotempty(LastSecurityEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    SendsSyslogLogs = iff(isnotempty(LastSyslogEvent), \\\"Yes\\\", \\\"No\\\"),\\r\\n    LastEvent = coalesce(LastSecurityEvent, LastSyslogEvent),\\r\\n    Source = \\\"AMA Only\\\"\\r\\n| project\\r\\nDeviceName = tostring(split(DeviceName, \\\".\\\")[0]),\\r\\nOSPlatform,\\r\\nMDEStatus,\\r\\nHeartbeatSeen,\\r\\nHasAMA,\\r\\nAMAStatus,\\r\\nLastAMASeen,\\r\\nSendsSecurityLogs,\\r\\nSendsSyslogLogs,\\r\\nLastEvent,\\r\\nSource\\r\\n)\\r\\n// Classification with MDE, AMA or both\\r\\n// NOTE: \\\"AMA\\\" here is inferred from Heartbeat in the selected time window. A device\\r\\n// with no heartbeat (powered off, network blocked, AMA stopped) is classified as\\r\\n// \\\"MDE Only (no AMA heartbeat)\\\" even if the AMA extension is installed. The merged\\r\\n// view below cross-checks the extension state via Azure Resource Graph.\\r\\n| extend StatusCategory = case(\\r\\nSource == \\\"Defender Device\\\" and MDEStatus == \\\"Onboarded\\\" and HasAMA == \\\"Yes\\\", \\\"MDE + AMA\\\",\\r\\nSource == \\\"Defender Device\\\" and MDEStatus == \\\"Onboarded\\\" and HasAMA == \\\"No\\\", \\\"MDE Only (no AMA heartbeat)\\\",\\r\\nSource == \\\"Defender Device\\\" and MDEStatus != \\\"Onboarded\\\", strcat(\\\"MDE \\\", MDEStatus),\\r\\nSource == \\\"AMA Only\\\", \\\"AMA Only\\\",\\r\\n\\\"Unknown\\\"\\r\\n)\\r\\n// Filters for workbook parameters\\r\\n| order by Source asc, DeviceName asc\\r\\n| where '{HasAMA}' == 'All' or HasAMA == '{HasAMA}'\\r\\n| where OSPlatform contains '{ServerFilter}'\\r\\n| where StatusCategory <> \\\"{ExcludeCompliant}\\\"\",\"selectedWorkspaceIds\":[\"{WorkspaceId}\"]}",
+                "size": 2,
+                "title": "📋 Endpoint Coverage Matrix: MDE Onboarding & AMA Log Ingestion Status",
+                "timeContextFromParameter": "TimeRange",
+                "showExportToExcel": true,
+                "queryType": "advancedHunting",
+                "crossComponentResources": [
+                    "{Workspace}"
+                ],
+                "gridSettings": {
+                    "formatters": [
+                        {
+                            "columnMatch": "HasAMA",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSecurityLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsWindowsEvents",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSyslogLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "StatusCategory",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "colors",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "MDE + AMA",
+                                        "representation": "green",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "MDE Only",
+                                        "representation": "orange",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "AMA Only",
+                                        "representation": "orange",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "redBright",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SensorHealth",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Active",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Inactive",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "ImpairedCommunications",
+                                        "representation": "2",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "filter": true,
+                    "sortBy": [
+                        {
+                            "itemKey": "StatusCategory",
+                            "sortOrder": 1
+                        }
+                    ]
+                }
+            },
+            "name": "Table - MDEvsAMA",
+            "id": "34304cc6-9ade-47a7-ba1b-b27dcf12f069"
+        },
+        {
+            "type": 1,
+            "content": {
+                "json": "# 📡 Data Collection Rule (DCR) Inventory\r\n## Azure VM & Arc Machine DCR Assignments\r\n\r\nThis section provides a comprehensive view of **Data Collection Rules (DCRs)** assigned to your virtual machines across Azure and hybrid environments.\r\n\r\n### 🔎 How to Use\r\n1. Use the **VM Name** filter below to search for specific machines\r\n2. Cross-reference with the coverage matrix above to identify machines with AMA but missing DCR assignments\r\n3. Review the `dcrIds` column to verify correct DCR configuration\r\n\r\n### 📌 Key Columns\r\n| Column | Description |\r\n|--------|-------------|\r\n| **vmType** | Azure VM or Azure Arc-enabled server |\r\n| **powerState** | Current VM power state (Running/Deallocated) |\r\n| **hasAMAExt** | AMA extension installation status |\r\n| **hasDCR** | Whether any DCR is associated with this machine |\r\n| **dcrCount** | Number of DCRs assigned |\r\n| **dcrIds** | List of assigned Data Collection Rule resource IDs |"
+            },
+            "name": "Text - DCR inventory",
+            "id": "497624eb-5832-4596-99ec-20e54be3b214",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                }
+            ]
+        },
+        {
+            "type": 9,
+            "content": {
+                "version": "KqlParameterItem/1.0",
+                "parameters": [
+                    {
+                        "id": "ca0fdf10-d4fd-46ef-838e-6febf5d39898",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "VMName",
+                        "label": "VM name",
+                        "type": 1,
+                        "timeContext": {
+                            "durationMs": 86400000
+                        },
+                        "value": ""
+                    }
+                ],
+                "style": "pills"
+            },
+            "name": "Parameters - Filter DCR",
+            "id": "6cdf025d-25a2-402b-92a6-90db6bc1fbfa"
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "// List VMs with DCR associations, power state, and AMA extension version\r\nresources\r\n| where type =~ 'microsoft.compute/virtualmachines' or type =~ 'microsoft.hybridcompute/machines'\r\n| extend vmName = tolower(name),\r\n         vmIdLower = tolower(id),\r\n         resourceGroup = tostring(resourceGroup),\r\n         subscription = tostring(subscriptionId),\r\n         vmType = case(\r\n             type =~ 'microsoft.compute/virtualmachines', 'Azure VM',\r\n             type =~ 'microsoft.hybridcompute/machines', 'Azure Arc',\r\n             'Unknown'\r\n         ),\r\n         powerState = tostring(properties.extended.instanceView.powerState.displayStatus)\r\n| project vmName, vmIdLower, resourceGroup, subscription, vmType, powerState\r\n// Join with AMA extension to get version\r\n| join kind=leftouter (\r\n    resources\r\n    | where type =~ 'microsoft.compute/virtualmachines/extensions' or type =~ 'microsoft.hybridcompute/machines/extensions'\r\n    | where name has_any ('AzureMonitorWindowsAgent', 'AzureMonitorLinuxAgent', 'AMA')\r\n    | extend extVmIdLower = tolower(tostring(split(id, '/extensions/')[0])),\r\n             amaExtVersion = tostring(properties.typeHandlerVersion),\r\n             amaExtState = tostring(properties.provisioningState)\r\n    | project extVmIdLower, amaExtVersion, amaExtState\r\n) on $left.vmIdLower == $right.extVmIdLower\r\n// Join with DCR associations using full VM resource ID\r\n| join kind=leftouter (\r\n    insightsresources\r\n    | where type =~ 'microsoft.insights/datacollectionruleassociations'\r\n    | extend assocIdLower = tolower(id)\r\n    | extend vmIdFromDcra = tostring(split(assocIdLower, '/providers/microsoft.insights/datacollectionruleassociations/')[0])\r\n    | extend dcrId = tolower(tostring(properties.dataCollectionRuleId))\r\n    | where isnotempty(dcrId)\r\n    | summarize \r\n        dcrIds = make_set(dcrId),\r\n        dcraNames = make_set(name),\r\n        dcrCount = dcount(dcrId)\r\n        by vmIdFromDcra\r\n) on $left.vmIdLower == $right.vmIdFromDcra\r\n| extend hasDCR = iff(isnotempty(dcrCount), 'Yes', 'No'),\r\n         hasAMAExt = iff(isnotempty(amaExtVersion), 'Yes', 'No')\r\n| where vmName contains '{VMName}'\r\n| project vmName, resourceGroup, subscription, vmType, powerState, hasAMAExt, amaExtVersion, amaExtState, hasDCR, dcrCount, dcrIds, dcraNames\r\n| order by resourceGroup asc, vmName asc",
+                "size": 2,
+                "title": "🖥️ Virtual Machine Inventory with DCR Associations & AMA Extension Status",
+                "showExportToExcel": true,
+                "queryType": 1,
+                "resourceType": "microsoft.resourcegraph/resources",
+                "crossComponentResources": [
+                    "value::all"
+                ],
+                "gridSettings": {
+                    "formatters": [
+                        {
+                            "columnMatch": "hasAMAExt",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "hasDCR",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "rowLimit": 1000,
+                    "filter": true
+                }
+            },
+            "name": "Table - DCR",
+            "id": "8fb3cfd3-aec2-4887-b610-d0fb2b9ff10d"
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "// AMA Extension version distribution across all VMs\r\nresources\r\n| where type =~ 'microsoft.compute/virtualmachines/extensions' or type =~ 'microsoft.hybridcompute/machines/extensions'\r\n| where name has_any ('AzureMonitorWindowsAgent', 'AzureMonitorLinuxAgent', 'AMA')\r\n| extend amaVersion = tostring(properties.typeHandlerVersion)\r\n| where isnotempty(amaVersion)\r\n| summarize Count = count() by amaVersion\r\n| order by amaVersion asc",
+                "size": 2,
+                "title": "📦 AMA Extension Version Distribution",
+                "queryType": 1,
+                "resourceType": "microsoft.resourcegraph/resources",
+                "crossComponentResources": [
+                    "value::all"
+                ],
+                "visualization": "barchart",
+                "chartSettings": {
+                    "xAxis": "amaVersion",
+                    "yAxis": [
+                        "Count"
+                    ],
+                    "showLegend": false
+                }
+            },
+            "name": "Chart - AMA Version Distribution",
+            "id": "a1b2c3d4-amav-4000-8000-000000000003",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "ShowVisuals",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                }
+            ]
+        },
+        {
+            "type": 1,
+            "content": {
+                "json": "# 🔗 Unified Endpoint View: MDE + AMA + DCR Correlation\r\n## Comprehensive Endpoint Telemetry Configuration Report\r\n\r\nThis consolidated table merges data from **Microsoft Defender for Endpoint**, **Azure Monitor Agent telemetry**, and **Data Collection Rule assignments** to provide a single source of truth for endpoint monitoring configuration.\r\n\r\n### 💡 Recommended Usage\r\n- Set **AMA heartbeat seen = Yes** to focus on devices that are actively reporting via AMA\r\n- Compare `HeartbeatSeen` (from Heartbeat) with `hasAMAExt` (from Azure Resource Graph): if `hasAMAExt = Yes` but `HeartbeatSeen = No`, the AMA extension is installed but not reporting — investigate VM power state, network connectivity, AMA service, and DCR association\r\n- Look for devices where `HeartbeatSeen = Yes` but `hasDCR = No` — these have AMA reporting but no DCR configured\r\n- Check `StatusCategory` to quickly identify the monitoring posture of each device\r\n\r\n### ⚠️ How to interpret \"No AMA or No Heartbeat\"\r\nThe first table classifies AMA presence based on the **Heartbeat** table only. A device shown as `No AMA or No Heartbeat` / `MDE Only (no AMA heartbeat)` may actually have the AMA extension installed but not reporting. Common causes:\r\n- VM is powered off or deallocated\r\n- Network connectivity to AMA endpoints is blocked\r\n- AMA service is stopped or misconfigured\r\n- No Data Collection Rule (DCR) is associated with the machine\r\n\r\nThe merged view below combines this with the **Azure Resource Graph** (`hasAMAExt`, `amaExtVersion`, `amaExtState`) which reflects the actual extension installation state and is the authoritative source.\r\n\r\n### 🚨 Common Issues to Look For\r\n| Scenario | Issue | Remediation |\r\n|----------|-------|-------------|\r\n| `MDE Only (no AMA heartbeat)` + `hasAMAExt = No` | Device has Defender but no AMA extension installed | Deploy AMA extension and configure DCR |\r\n| `MDE Only (no AMA heartbeat)` + `hasAMAExt = Yes` | AMA extension installed but not reporting | Check VM power state, network, AMA service and DCR association |\r\n| `AMA Only` | Device has AMA but not onboarded to MDE | Onboard to Microsoft Defender for Endpoint |\r\n| `hasDCR = No` | AMA installed but no DCR assigned | Associate appropriate DCR(s) for log collection |\r\n| `SendsSecurityLogs = No` | AMA + DCR present but no logs received | Check DCR configuration and network connectivity |"
+            },
+            "name": "Text - Explainer MDE + AMA + DCR",
+            "id": "3b49dfb0-b1e2-407b-af91-43238c3ff333",
+            "conditionalVisibilities": [
+                {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                }
+            ]
+        },
+        {
+            "type": 3,
+            "content": {
+                "version": "KqlItem/1.0",
+                "query": "{\n  \"version\": \"Merge/1.0\",\n  \"merges\": [\n    {\n      \"id\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"leftTable\": \"Table - MDEvsAMA\",\n      \"mergeType\": \"leftouter\",\n      \"leftColumn\": \"DeviceName\",\n      \"rightTable\": \"Table - DCR\",\n      \"rightColumn\": \"vmName\"\n    }\n  ],\n  \"projectRename\": [\n    {\n      \"originalName\": \"[Table - MDEvsAMA].DeviceName\",\n      \"mergedName\": \"DeviceName\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].OSPlatform\",\n      \"mergedName\": \"OSPlatform\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].vmType\",\n      \"mergedName\": \"vmType\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].powerState\",\n      \"mergedName\": \"powerState\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].hasAMAExt\",\n      \"mergedName\": \"hasAMAExt\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].amaExtVersion\",\n      \"mergedName\": \"amaExtVersion\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].amaExtState\",\n      \"mergedName\": \"amaExtState\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].HasAMA\",\n      \"mergedName\": \"HasAMAHeartbeat\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].hasDCR\",\n      \"mergedName\": \"hasDCR\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].LastAMASeen\",\n      \"mergedName\": \"LastAMASeen\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].SendsSecurityLogs\",\n      \"mergedName\": \"SendsSecurityLogs\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].SendsSyslogLogs\",\n      \"mergedName\": \"SendsSyslogLogs\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].LastEvent\",\n      \"mergedName\": \"LastEvent\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].Source\",\n      \"mergedName\": \"Source\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].StatusCategory\",\n      \"mergedName\": \"StatusCategory\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].MDEStatus\",\n      \"mergedName\": \"MDEStatus\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].resourceGroup\",\n      \"mergedName\": \"resourceGroup\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].subscription\",\n      \"mergedName\": \"subscription\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].dcrCount\",\n      \"mergedName\": \"dcrCount\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].dcrIds\",\n      \"mergedName\": \"dcrIds\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].dcraNames\",\n      \"mergedName\": \"dcraNames\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - DCR].vmName\",\n      \"mergedName\": \"vmName\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].SensorHealth\",\n      \"mergedName\": \"SensorHealth\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].ExposureLevel\",\n      \"mergedName\": \"ExposureLevel\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].SendsWindowsEvents\",\n      \"mergedName\": \"SendsWindowsEvents\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].DaysSinceLastEvent\",\n      \"mergedName\": \"DaysSinceLastEvent\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    },\n    {\n      \"originalName\": \"[Table - MDEvsAMA].HealthStatus\",\n      \"mergedName\": \"HealthStatus\",\n      \"fromId\": \"88d93518-b640-427d-9182-4d64fcc73506\",\n      \"isNewItem\": false\n    }\n  ]\n}",
+                "size": 2,
+                "gridSettings": {
+                    "formatters": [
+                        {
+                            "columnMatch": "vmName",
+                            "formatter": 5
+                        },
+                        {
+                            "columnMatch": "HasAMAHeartbeat",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSecurityLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsWindowsEvents",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SendsSyslogLogs",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Yes",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "No",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "StatusCategory",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "colors",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "MDE + AMA",
+                                        "representation": "green",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "MDE Only",
+                                        "representation": "orange",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "AMA Only",
+                                        "representation": "orange",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "redBright",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "columnMatch": "SensorHealth",
+                            "formatter": 18,
+                            "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Active",
+                                        "representation": "success",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "==",
+                                        "thresholdValue": "Inactive",
+                                        "representation": "3",
+                                        "text": "{0}{1}"
+                                    },
+                                    {
+                                        "operator": "Default",
+                                        "thresholdValue": null,
+                                        "representation": "unknown",
+                                        "text": "{0}{1}"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "filter": true,
+                    "sortBy": [
+                        {
+                            "itemKey": "MDEStatus",
+                            "sortOrder": 1
+                        }
+                    ]
+                },
+                "sortBy": [
+                    {
+                        "itemKey": "hasAMAExt",
+                        "sortOrder": 1
+                    }
+                ],
+                "title": "🖥️ Virtual Machine Inventory with MDE + AMA & DCR Associations Correlation",
+                "showExportToExcel": true,
+                "queryType": 7
+            },
+            "name": "Merge - MDEvsAMA + DCR",
+            "id": "cc1743ce-bc12-4c0f-8bb2-4f3f4432d76c"
+        }
+    ],
+    "fallbackResourceIds": [
+        ""
+    ],
+    "fromTemplateId": "sentinel-UserWorkbook",
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+    "context": {
+        "ownerId": ""
+    }
+}

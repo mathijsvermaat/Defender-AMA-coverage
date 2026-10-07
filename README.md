@@ -1,11 +1,20 @@
 ***
 
-# AMA vs Defender Coverage Workbook
+# AMA vs Defender Coverage Workbooks
 
 > [!NOTE]
 > **Part of the [Sentinel Maturity Model](https://github.com/mathijsvermaat/Sentinel-Maturity)** — tiered guidance for Microsoft Sentinel data-connector onboarding, retention and detection coverage. This workbook backs the [Defender AMA Coverage walkthrough](https://github.com/mathijsvermaat/Sentinel-Maturity/blob/main/procedures/defender-ama-coverage.md); record the coverage gaps it surfaces in the [assessment checklist](https://mathijsvermaat.github.io/sentinel-maturity-assessment.html).
 
-#### ⚠️ This workbook assumes Microsoft Defender XDR data is ingested into Sentinel. Without ingestion, device name normalization and correlation may be inconsistent. To work around that, use the **Data source** toggle (see [Data source modes](#data-source-modes-log-analytics-vs-advanced-hunting)) to switch the coverage table to **Advanced Hunting**, or copy the KQL query from the GitHub page and run it in Advanced Hunting in the Defender Portal (https://security.microsoft.com). 
+## Choose a workbook
+
+| File | Status | Data sources |
+|------|--------|--------------|
+| [Defender_vs_AMA.json](Defender_vs_AMA.json) | Existing workbook / fallback; unchanged by the native XDR addition | Use **Log Analytics (Sentinel)** mode with `DeviceInfo`, `Heartbeat`, `SecurityEvent`, and `Syslog` in the Sentinel workspace. |
+| [Defender_vs_AMA_NativeXDR.json](Defender_vs_AMA_NativeXDR.json) | **Preview / opt-in** | Native Defender XDR `DeviceInfo` plus `Heartbeat`, `SecurityEvent`, and `Syslog` from the selected Sentinel workspace. No Defender data ingestion into Log Analytics is required. |
+
+The native XDR preview has been validated in one test tenant, but has not yet been broadly validated in production. Import it as a **separate workbook** and keep your existing deployment as a fallback. Importing the preview does not replace the existing workbook or change data ingestion configuration.
+
+#### ⚠️ The native XDR preview runs in the Microsoft Defender portal and requires a Microsoft Sentinel workspace connected to the unified experience. The existing Log Analytics workbook remains available for environments that ingest Defender XDR data into Sentinel.
 
 When running the KQL query, the **AMA presence** in the first table is inferred from the `Heartbeat` table within the selected time window — not from the actual extension state. The reason is that the real installation state is only available via an Azure Resource Graph (ARG) call. As a result, a device may show as `No AMA or No Heartbeat` / `MDE Only (no AMA heartbeat)` even when the AMA extension is installed but not reporting (for example: VM powered off, network blocked, AMA service stopped, or no DCR associated).
 
@@ -29,37 +38,30 @@ By correlating data from **DeviceInfo**, **Heartbeat**, and **SecurityEvent/Sysl
 
 ***
 
-## Data source modes (Log Analytics vs Advanced Hunting)
+## Data sources
 
-The **Data source** filter at the top of the workbook controls how the *Endpoint Coverage Matrix* is sourced. The rest of the workbook (tiles, DCR inventory, merged DCR view) always runs against Log Analytics.
+### Existing workbook
 
-| Mode | Coverage matrix structure | When to use |
-|------|---------------------------|-------------|
-| **Log Analytics (Sentinel)** *(default)* | A single `Table - MDEvsAMA` query joins `DeviceInfo`, `Heartbeat`, `SecurityEvent`, and `Syslog` in one Log Analytics query, with a computed `StatusCategory`. | Defender XDR data is ingested into Sentinel. Full functionality, including tiles and the merged DCR view. |
-| **Advanced Hunting (Defender XDR)** | Two side-by-side tables (see below). | Defender XDR data is **not** ingested into Sentinel. Advanced Hunting can only reach Defender XDR tables, so onboarding and AMA telemetry are fetched separately and shown side by side. |
+[Defender_vs_AMA.json](Defender_vs_AMA.json) retains the implementation from `main` without changes. Its full coverage matrix and summary use Log Analytics and require ingested `DeviceInfo` data. Keep its **Data source** setting on **Log Analytics (Sentinel)** for this fallback path. Its older, limited Advanced Hunting mode is also unchanged; use the separate preview file for the new full native implementation.
 
-### Why Advanced Hunting mode uses two tables
+### Native XDR preview
 
-Advanced Hunting (in the Defender portal) can query Defender XDR tables but **not** the Microsoft Sentinel tables (`Heartbeat` / `SecurityEvent` / `Syslog`). Running the full single-query coverage matrix against the Advanced Hunting data source therefore fails. These are two separate data planes that cannot be joined — neither in KQL (Advanced Hunting can't see the Sentinel tables) nor by the workbook **Merge** control (the Merge data source cannot consume an `advancedHunting` query as an input). Advanced Hunting mode therefore presents the data as two correlated tables:
+The coverage query in [Defender_vs_AMA_NativeXDR.json](Defender_vs_AMA_NativeXDR.json) uses the **Advanced Hunting** workbook data source in the unified Microsoft Defender portal. This allows one KQL query to correlate:
 
-1. **`Table - MDE (Advanced Hunting)`** — `DeviceInfo` onboarding status from Defender XDR (`Timestamp`, `queryType: advancedHunting`). Projects `DeviceName`, `DeviceKey`, `OSPlatform`, `MDEStatus`.
-2. **`Table - AMA telemetry (Log Analytics)`** — `Heartbeat` + `SecurityEvent` + `Syslog` per device from the Sentinel workspace (`TimeGenerated`). Projects `AMADevice`, `AMAKey`, `HeartbeatSeen`, `SendsSecurityLogs`, `SendsSyslogLogs`, and timestamps.
+- Native Defender XDR `DeviceInfo` data, using its `Timestamp` field
+- Microsoft Sentinel `Heartbeat`, `SecurityEvent`, and `Syslog` data, using `TimeGenerated`
 
-Both tables are shown. **Correlate manually on the short device name:** `DeviceKey` (top table) matches `AMAKey` (bottom table).
+The existing filters, executive summary tiles, endpoint coverage matrix, and merged DCR view all use this unified result. Azure Resource Graph remains the source for VM extension and DCR association details.
 
-- A device in **both** tables = MDE + AMA.
-- A device in the **top table only** = onboarded to MDE but **no** AMA heartbeat in the time window (MDE-only / not reporting).
-- A device in the **bottom table only** = has an AMA heartbeat but is **not** onboarded to MDE (AMA-only).
+The connected Sentinel workspace controls which Sentinel tables are available. Users need access to the Defender XDR data and at least the Microsoft Sentinel Reader role. See [Advanced hunting with Microsoft Sentinel data in the Microsoft Defender portal](https://learn.microsoft.com/defender-xdr/advanced-hunting-microsoft-defender).
 
-> The `Merge - MDE + AMA (Advanced Hunting)` step is left in the workbook but disabled (a `DataSourceMode` value that never matches), because the workbook Merge control returns no rows when one of its inputs is an Advanced Hunting query.
+The existing **Workspace** picker selects an Azure resource ID. A hidden, query-backed `WorkspaceId` parameter resolves its Log Analytics customer GUID through Azure Resource Graph and supplies it to the Advanced Hunting `selectedWorkspaceIds` setting. `crossComponentResources` alone does not scope Advanced Hunting queries. Selecting a workspace is required; the coverage queries wait until its GUID is resolved rather than silently querying a default workspace.
 
-**Setup for Advanced Hunting mode:** after importing the workbook in the Microsoft Defender portal, switch to edit mode, open the `Table - MDE (Advanced Hunting)` step, and confirm **Data source = Advanced hunting** (binding `queryType: advancedHunting`).
+The distributed workbook has **no prefilled workspace or workspace GUID**. Defender XDR data comes from the signed-in Defender tenant; the workspace picker scopes only the Sentinel data. GUIDs in `id`, `key`, and merge identifiers are internal workbook control IDs, not tenant or workspace bindings. They do not need to be changed for another tenant.
 
-**Limitations of Advanced Hunting mode:**
-- `StatusCategory` and the `Exclude Compliant` / `AMA heartbeat seen` filters are **not** applied (those depend on a single combined query). Use `MDEStatus` + `HeartbeatSeen` across the two tables instead.
-- The Executive Summary **tiles** and the **merged DCR view** are Log-Analytics-only and hidden in Advanced Hunting mode.
-- Advanced Hunting retains Defender XDR data for **30 days** by default (longer only if streamed through Sentinel).
-- Viewers need Defender XDR access in addition to Log Analytics reader.
+The portal can include saved selections and cached parameter values when exporting an already configured workbook. Use the repository JSON as the portable template. Before sharing an edited/exported copy, remove saved workspace selections and cached GUID values, and retain the parameter references in the query scopes rather than literal tenant-specific IDs.
+
+In the AMA-only branch, Sentinel telemetry joins run **before** the Defender exclusion and onboarding-status join. This preserves the existing results while avoiding the HTTP 500 (`ErrorCode: 9`) reproduced when a Sentinel join followed those cross-source operations. The same query order is used by the matrix and summary tiles.
 
 ***
 
@@ -153,11 +155,21 @@ Both tables are shown. **Correlate manually on the short device name:** `DeviceK
 
 ## Prerequisites
 
-*   Microsoft Sentinel workspace
-*   Defender for Endpoint integration enabled
+### Existing workbook
+
+*   A Microsoft Sentinel workspace with `DeviceInfo`, `Heartbeat`, `SecurityEvent`, and `Syslog` available in Log Analytics
+*   Read access to the workspace and Azure resources used by the VM/DCR inventory
+
+### Native XDR preview
+
+*   Microsoft Sentinel workspace connected to the unified Microsoft Defender portal
+*   Defender for Endpoint access
+*   Microsoft Sentinel Reader role or higher
+*   Azure resource read access for the workspace GUID lookup and the existing VM/DCR inventory
 *   AMA deployed on target machines
-*   Relevant tables in Log Analytics:
+*   Native Defender XDR table:
     *   `DeviceInfo`
+*   Relevant tables in the connected Sentinel workspace:
     *   `Heartbeat`
     *   `SecurityEvent`
     *   `Syslog`
@@ -166,16 +178,30 @@ Both tables are shown. **Correlate manually on the short device name:** `DeviceK
 
 ## Deployment
 
-1.  Open **Microsoft Sentinel Workbooks**
+### Existing workbook / fallback
+
+If already deployed, continue using the existing workbook without changes. For a new deployment, open **Microsoft Sentinel Workbooks**, select **Add Workbook → Advanced Editor**, and paste [Defender_vs_AMA.json](Defender_vs_AMA.json). Select your workspace and leave **Data source = Log Analytics (Sentinel)**.
+
+### Native XDR preview
+
+1.  Open **Microsoft Sentinel → Workbooks** in the [Microsoft Defender portal](https://security.microsoft.com)
 2.  Click **Add Workbook → Advanced Editor**
-3.  Paste the JSON from this repository
-4.  Save and customize filters as needed
-5.  *(Optional)* To use **Advanced Hunting** mode, open the workbook in the Microsoft Defender portal and confirm the `Table - MDE (Advanced Hunting)` item has **Data source = Advanced hunting**. See [Data source modes](#data-source-modes-log-analytics-vs-advanced-hunting).
+3.  Paste [Defender_vs_AMA_NativeXDR.json](Defender_vs_AMA_NativeXDR.json)
+4.  Select the connected Sentinel workspace using the workbook's **Workspace** filter
+5.  Confirm the summary, coverage matrix, and merged DCR view load
+6.  Save under a separate name, such as **AMA vs Defender - Native XDR Preview**; do not overwrite your existing workbook
+7.  Validate the expected coverage with your own data and filters before adopting the preview in production
+
+If the preview fails or its results are unexpected, continue using the existing workbook. Keep that deployment available until the preview has been validated in your environment.
 
 **Advisory:**
 - Default time range is 7 days (adjustable)
+- Native Defender XDR data is normally retained for 30 days. Selecting a longer range does not create additional native history.
 - Workstations are excluded by default (toggle with **Exclude Workstations** filter)
 - By default, the **Exclude Compliant** filter is set to `MDE + AMA`, which excludes compliant machines so you can focus on remediation. Adjust this filter to include compliant devices if needed.
+- A `WorkspaceId` parameter message means the workspace is not yet selected or its Azure Resource Graph lookup has not resolved. Check the top-level workspace selection and Azure read permissions.
+- Select a workspace connected to the Defender portal that exposes the required Sentinel tables. Missing tables or access failures are not treated as zero telemetry.
+- The standalone [Defender_AMA_coverage.kql](Defender_AMA_coverage.kql) file is unchanged by this workbook migration.
 
 ***
 
