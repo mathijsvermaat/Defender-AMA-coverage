@@ -14,7 +14,8 @@
 
 The native XDR preview has been validated in one test tenant, but has not yet been broadly validated in production. Import it as a **separate workbook** and keep your existing deployment as a fallback. Importing the preview does not replace the existing workbook or change data ingestion configuration.
 
-#### ⚠️ The native XDR preview runs in the Microsoft Defender portal and requires a Microsoft Sentinel workspace connected to the unified experience. The existing Log Analytics workbook remains available for environments that ingest Defender XDR data into Sentinel.
+> [!WARNING]
+> The native XDR preview runs in the Microsoft Defender portal and requires a Microsoft Sentinel workspace connected to the unified experience. The existing Log Analytics workbook remains available for environments that ingest Defender XDR data into Sentinel.
 
 When running the KQL query, the **AMA presence** in the first table is inferred from the `Heartbeat` table within the selected time window — not from the actual extension state. The reason is that the real installation state is only available via an Azure Resource Graph (ARG) call. As a result, a device may show as `No AMA or No Heartbeat` / `MDE Only (no AMA heartbeat)` even when the AMA extension is installed but not reporting (for example: VM powered off, network blocked, AMA service stopped, or no DCR associated).
 
